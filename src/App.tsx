@@ -80,6 +80,10 @@ export default function App() {
     return (saved as 'light' | 'dark') || 'dark';
   });
 
+  const [inputPassword, setInputPassword] = useState('');
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordError, setPasswordError] = useState(false);
+
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -90,6 +94,17 @@ export default function App() {
   }, [theme]);
 
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+  const handleUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputPassword === 'Lince7') {
+      setPasswordError(false);
+      setIsPasswordModalOpen(false);
+      await signInWithGoogle();
+    } else {
+      setPasswordError(true);
+    }
+  };
 
   useEffect(() => {
     if (!auth) {
@@ -202,12 +217,69 @@ export default function App() {
           </div>
           <h1 className="text-5xl font-bold tracking-tight text-slate-900 dark:text-slate-100 mb-4 font-sans">Nexus</h1>
           <p className="text-slate-500 dark:text-slate-400 mb-10 text-lg">Organize seu mundo. Conquiste seus objetivos. Domine sua rotina.</p>
-          <Button 
-            onClick={signInWithGoogle}
-            className="w-full py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all bg-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-          >
-            Começar Agora com Google
-          </Button>
+          
+          <Dialog open={isPasswordModalOpen} onOpenChange={setIsPasswordModalOpen}>
+            <DialogTrigger 
+              render={
+                <Button 
+                  className="w-full py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all bg-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                >
+                  Acessar Nexus
+                </Button>
+              }
+            />
+            <DialogContent className="sm:max-w-md rounded-2xl dark:bg-slate-900 dark:border-slate-800">
+              <DialogHeader>
+                <DialogTitle className="dark:text-white">Autenticação Nexus</DialogTitle>
+                <DialogDescription className="dark:text-slate-400">
+                  Para continuar, insira a chave de acesso do seu workspace.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleUnlock} className="space-y-4 pt-4">
+                <div className="space-y-2 text-left">
+                  <Label htmlFor="access-password">Senha de Acesso</Label>
+                  <Input 
+                    id="access-password"
+                    type="password"
+                    placeholder="Digite a senha..."
+                    value={inputPassword}
+                    onChange={(e) => setInputPassword(e.target.value)}
+                    className={`h-12 dark:bg-slate-800 ${passwordError ? 'border-rose-500 ring-rose-500' : ''}`}
+                    autoFocus
+                  />
+                  {passwordError && (
+                    <p className="text-xs text-rose-500 font-medium pt-1">Senha incorreta. Tente novamente.</p>
+                  )}
+                </div>
+                <Button 
+                  type="submit"
+                  className="w-full py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all bg-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                >
+                  Confirmar
+                </Button>
+                <div className="flex justify-center gap-4 pt-2">
+                  <a 
+                    href="https://wa.me/5519971087116?text=Esqueci%20a%20senha%20do%20Nexus" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                  >
+                    Esqueci a senha
+                  </a>
+                  <span className="text-slate-300 dark:text-slate-700 text-xs">•</span>
+                  <a 
+                    href="https://wa.me/5519971087116?text=Não%20sei%20a%20senha%20do%20Nexus" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                  >
+                    Não sei a senha
+                  </a>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
           <div className="mt-12 flex justify-center gap-8 opacity-40 dark:text-slate-400">
              <Briefcase className="w-6 h-6" />
              <UserIcon className="w-6 h-6" />

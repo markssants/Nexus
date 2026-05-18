@@ -126,10 +126,7 @@ export default function App() {
   useEffect(() => {
     if (!db) return;
     
-    // onSnapshotsInSync fires when all active listeners have been updated 
-    // and are consistent with each other.
     const unsubscribe = onSnapshotsInSync(db, () => {
-      // If we are online and this fires, it generally means local and server are in sync
       if (window.navigator.onLine) {
         setSyncStatus('idle');
       }
@@ -137,6 +134,19 @@ export default function App() {
 
     return unsubscribe;
   }, [db]);
+
+  const forceSync = async () => {
+    if (!db || !user) return;
+    setSyncStatus('syncing');
+    try {
+      // Re-trigger auth state to ensure tokens are fresh
+      await auth.currentUser?.getIdToken(true);
+      // Success will be reflected by onSnapshot listeners
+      setTimeout(() => setSyncStatus('idle'), 1000);
+    } catch (error) {
+      setSyncStatus('error');
+    }
+  };
 
   const trackOp = async <T,>(op: () => Promise<T>): Promise<T> => {
     setSyncStatus('syncing');
@@ -237,16 +247,21 @@ export default function App() {
       if (snapshot.metadata.hasPendingWrites) {
         setSyncStatus('syncing');
       }
+      
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
-      setTasks(prev => {
-        // Merge with existing to avoid flickering, but snapshot is authoritative
-        return docs.sort((a, b) => {
-          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return timeB - timeA;
-        });
-      });
+      
+      // Update sync status based on whether data came from cache or server
+      if (!snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites) {
+        setSyncStatus('idle');
+      }
+
+      setTasks(docs.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      }));
     }, (error) => {
+      console.error("Firestore error:", error);
       handleFirestoreError(error, OperationType.LIST, 'tasks');
     });
 
@@ -693,7 +708,7 @@ export default function App() {
         projects={projects}
         companies={companies}
         tasks={tasks}
-        user={user as any}
+        user={user}
         signOut={signOut}
         addProject={addProject}
         deleteProject={deleteProject}
@@ -706,6 +721,7 @@ export default function App() {
         syncStatus={syncStatus}
         isOffline={isOffline}
         retrySync={retrySync}
+        forceSync={forceSync}
       />
 
       <main className="flex-1 flex flex-col relative h-full overflow-hidden">

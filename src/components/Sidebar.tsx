@@ -22,6 +22,7 @@ import { CompanyManager } from './CompanyManager';
 import { NewProjectDialog } from './NewProjectDialog';
 import { NewCompanyDialog } from './NewCompanyDialog';
 import { EditSpaceDialog } from './EditSpaceDialog';
+import { Button } from './ui/button';
 
 interface SidebarProps {
   activeSpace: string;
@@ -31,7 +32,7 @@ interface SidebarProps {
   projects: Project[];
   companies: Company[];
   tasks: any[];
-  user: User;
+  user: User | null;
   signOut: () => void;
   addProject: (name: string, icon: string, color: string) => void;
   deleteProject: (id: string) => void;
@@ -44,6 +45,7 @@ interface SidebarProps {
   syncStatus: 'idle' | 'syncing' | 'error';
   isOffline: boolean;
   retrySync: () => void;
+  forceSync: () => Promise<void>;
 }
 
 export function Sidebar({
@@ -66,7 +68,8 @@ export function Sidebar({
   reorderCompanies,
   syncStatus,
   isOffline,
-  retrySync
+  retrySync,
+  forceSync
 }: SidebarProps) {
   const [editingProject, setEditingProject] = React.useState<Project | null>(null);
   const [editingCompany, setEditingCompany] = React.useState<Company | null>(null);
@@ -217,18 +220,37 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-        <div className="flex items-center gap-3">
-           <img src={(user as any).photoURL || ''} alt="User" className="w-10 h-10 rounded-full border-2 border-white dark:border-slate-700 shadow-sm" />
-           <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-semibold truncate dark:text-slate-200">{(user as any).displayName}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{(user as any).email}</p>
-           </div>
-           <button onClick={signOut} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">
-              <LogOut size={18} />
-           </button>
+      <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
+        {user && (
+          <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/30 p-2 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+            <img src={(user as any).photoURL || ''} alt="User" className="w-8 h-8 rounded-full border border-white dark:border-slate-700 shadow-sm" />
+            <div className="flex-1 overflow-hidden">
+                <p className="text-xs font-semibold truncate dark:text-slate-200">{(user as any).displayName}</p>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono truncate">{user.uid}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={forceSync}
+            className="flex-1 rounded-xl h-10 text-[10px] uppercase font-bold tracking-wider gap-2 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            disabled={syncStatus === 'syncing' || isOffline}
+          >
+            <RefreshCw size={14} className={syncStatus === 'syncing' ? 'animate-spin' : ''} />
+            Forçar Sync
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={signOut}
+            className="rounded-xl h-10 px-3 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+          >
+            <LogOut size={16} />
+          </Button>
         </div>
-        <p className="mt-4 text-[9px] font-bold tracking-[0.1em] text-slate-400 dark:text-slate-500/50 uppercase text-center">Nexus Workspace v1.5</p>
       </div>
 
       {editingProject && (

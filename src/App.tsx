@@ -92,6 +92,10 @@ export default function App() {
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
@@ -100,7 +104,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
 
     const tasksQuery = query(collection(db, 'tasks'), where('userId', '==', user.uid));
     const habitsQuery = query(collection(db, 'habits'), where('userId', '==', user.uid));
@@ -150,12 +154,35 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          className="w-12 h-12 border-4 border-slate-200 border-t-slate-800 rounded-full"
+          className="w-12 h-12 border-4 border-slate-200 border-t-slate-800 dark:border-t-slate-100 rounded-full mb-4"
         />
+        <p className="text-slate-500 dark:text-slate-400 font-medium">Carregando Nexus...</p>
+      </div>
+    );
+  }
+
+  if (!auth || !db) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 p-6 text-center">
+        <div className="max-w-md w-full bg-white dark:bg-slate-900 p-10 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800">
+          <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Settings className="w-10 h-10 animate-spin-slow" />
+          </div>
+          <h1 className="text-2xl font-bold dark:text-white mb-4">Configuração Necessária</h1>
+          <p className="text-slate-600 dark:text-slate-400 mb-8">
+            Você precisa configurar as chaves do Firebase no seu ambiente para o Nexus funcionar. 
+            Vá em <b>Configurações &gt; Segredos</b> e adicione as variáveis VITE_FIREBASE_*.
+          </p>
+          <div className="space-y-2 text-left bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl font-mono text-xs text-slate-500 dark:text-slate-400">
+            <p>VITE_FIREBASE_API_KEY</p>
+            <p>VITE_FIREBASE_PROJECT_ID</p>
+            <p>VITE_FIREBASE_APP_ID</p>
+          </div>
+        </div>
       </div>
     );
   }

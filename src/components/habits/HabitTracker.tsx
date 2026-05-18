@@ -74,26 +74,28 @@ export default function HabitTracker({ habits, onToggle, activeCategory }: Habit
   return (
     <div className="max-w-5xl mx-auto space-y-10 transition-colors duration-300">
       {/* Header Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-         <StatCard 
-            title="Consistência" 
-            value="85%" 
-            icon={<TrendingUp className="text-emerald-500" />} 
-            subtitle="Nos últimos 30 dias"
-         />
-         <StatCard 
-            title="Maior Streak" 
-            value="12 Dias" 
-            icon={<Flame className="text-orange-500" />} 
-            subtitle="Focar no objetivo"
-         />
-         <StatCard 
-            title="Conquistas" 
-            value="4" 
-            icon={<Trophy className="text-amber-500" />} 
-            subtitle="Selo de Disciplina Nível 1"
-         />
-      </div>
+      {habits.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <StatCard 
+              title="Consistência" 
+              value="85%" 
+              icon={<TrendingUp className="text-emerald-500" />} 
+              subtitle="Nos últimos 30 dias"
+          />
+          <StatCard 
+              title="Maior Streak" 
+              value="12 Dias" 
+              icon={<Flame className="text-orange-500" />} 
+              subtitle="Focar no objetivo"
+          />
+          <StatCard 
+              title="Conquistas" 
+              value="4" 
+              icon={<Trophy className="text-amber-500" />} 
+              subtitle="Selo de Disciplina Nível 1"
+          />
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
          <div>

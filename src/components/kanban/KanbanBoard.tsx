@@ -6,7 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Task, Status } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { Calendar, MoreVertical, Trash2 } from 'lucide-react';
+import { Calendar, MoreVertical, Trash2, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { format, parseISO } from 'date-fns';
 
@@ -14,6 +14,7 @@ interface KanbanBoardProps {
   tasks: Task[];
   onUpdate: (id: string, updates: Partial<Task>) => void;
   onDelete: (id: string) => void;
+  onAddTask?: (status: Status) => void;
 }
 
 const COLUMNS: { id: Status; title: string }[] = [
@@ -21,7 +22,7 @@ const COLUMNS: { id: Status; title: string }[] = [
   { id: 'in_progress', title: 'Em Andamento' },
   { id: 'done', title: 'Concluído' },
 ];
-export default function KanbanBoard({ tasks, onUpdate, onDelete }: KanbanBoardProps) {
+export default function KanbanBoard({ tasks, onUpdate, onDelete, onAddTask }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -76,6 +77,12 @@ export default function KanbanBoard({ tasks, onUpdate, onDelete }: KanbanBoardPr
                    {tasks.filter(t => t.status === column.id).length}
                  </span>
               </div>
+              <button 
+                onClick={() => onAddTask?.(column.id)}
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-all shadow-sm border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+              >
+                <Plus size={16} />
+              </button>
             </div>
 
             <SortableContext id={column.id} items={tasks.filter(t => t.status === column.id).map(t => t.id)} strategy={verticalListSortingStrategy}>

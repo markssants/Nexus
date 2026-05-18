@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Task": {
+      "title": "Task",
+      "description": "A single task or to-do item.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the task." },
+        "description": { "type": "string", "description": "Detailed notes about the task." },
+        "status": { "type": "string", "enum": ["todo", "in_progress", "done"], "description": "Current status of the task." },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"], "description": "Priority level." },
+        "category": { "type": "string", "enum": ["work", "personal", "study"], "description": "Task category." },
+        "dueDate": { "type": "string", "format": "date-time", "description": "Deadline for the task." },
+        "userId": { "type": "string", "description": "Owner of the task." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "status", "userId", "category"]
+    },
+    "Habit": {
+      "title": "Habit",
+      "description": "A recurring habit to track.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Name of the habit." },
+        "userId": { "type": "string" },
+        "completedDates": { "type": "array", "description": "List of dates when the habit was completed." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "userId"]
+    }
+  },
+  "firestore": {
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Collection of tasks."
+    },
+    "/habits/{habitId}": {
+      "schema": "Habit",
+      "description": "Collection of habits."
+    }
+  }
+}

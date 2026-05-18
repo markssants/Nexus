@@ -1,0 +1,8 @@
+{
+  "name": "Nexus Productivity Suite",
+  "description": "A comprehensive task management and habit tracking workspace with Kanban, List, and Calendar views.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

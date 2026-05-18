@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidTask(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.status in ['todo', 'in_progress', 'done'] &&
+             data.category in ['work', 'personal', 'study'] &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidHabit(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.userId == request.auth.uid;
+    }
+
+    match /tasks/{taskId} {
+      allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidTask(request.resource.data);
+      allow update: if isSignedIn() && isValidTask(request.resource.data) && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /habits/{habitId} {
+      allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidHabit(request.resource.data);
+      allow update: if isSignedIn() && isValidHabit(request.resource.data) && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

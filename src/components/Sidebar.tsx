@@ -8,7 +8,11 @@ import {
   BookOpen, 
   Target, 
   LogOut,
-  Pencil
+  Pencil,
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { Company, Project } from '../types';
@@ -37,6 +41,9 @@ interface SidebarProps {
   deleteCompany: (id: string) => void;
   updateCompany: (id: string, updates: Partial<Company>) => void;
   reorderCompanies: (companies: Company[]) => void;
+  syncStatus: 'idle' | 'syncing' | 'error';
+  isOffline: boolean;
+  retrySync: () => void;
 }
 
 export function Sidebar({
@@ -56,20 +63,28 @@ export function Sidebar({
   addCompany,
   deleteCompany,
   updateCompany,
-  reorderCompanies
+  reorderCompanies,
+  syncStatus,
+  isOffline,
+  retrySync
 }: SidebarProps) {
   const [editingProject, setEditingProject] = React.useState<Project | null>(null);
   const [editingCompany, setEditingCompany] = React.useState<Company | null>(null);
 
   return (
     <aside className="w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-20">
-      <div className="p-6 overflow-y-auto flex-1 scrollbar-hide">
-        <div className="flex items-center gap-3 mb-8">
+      <div className="flex items-center justify-between p-6 pb-2">
+        <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-slate-900 dark:bg-white rounded-xl flex items-center justify-center shadow-lg">
             <CheckCircle2 className="text-white dark:text-slate-900 w-6 h-6" />
           </div>
           <span className="text-xl font-bold tracking-tight dark:text-white">Nexus</span>
         </div>
+        
+        <SyncIndicator status={syncStatus} offline={isOffline} onRetry={retrySync} />
+      </div>
+
+      <div className="p-6 pt-2 overflow-y-auto flex-1 scrollbar-hide">
 
         <div className="mb-2">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">Workspace</p>
@@ -223,6 +238,7 @@ export function Sidebar({
           isOpen={!!editingProject} 
           onClose={() => setEditingProject(null)} 
           onUpdate={updateProject} 
+          onDelete={deleteProject}
         />
       )}
 
@@ -233,9 +249,50 @@ export function Sidebar({
           isOpen={!!editingCompany} 
           onClose={() => setEditingCompany(null)} 
           onUpdate={updateCompany} 
+          onDelete={deleteCompany}
         />
       )}
     </aside>
+  );
+}
+
+function SyncIndicator({ status, offline, onRetry }: { status: 'idle' | 'syncing' | 'error', offline: boolean, onRetry: () => void }) {
+  if (offline) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 dark:bg-rose-500/10 text-rose-500 rounded-full border border-rose-100 dark:border-rose-500/20 animate-pulse">
+        <CloudOff size={12} />
+        <span className="text-[10px] font-bold uppercase tracking-tight">Offline</span>
+      </div>
+    );
+  }
+
+  if (status === 'syncing') {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-full border border-blue-100 dark:border-blue-500/20">
+        <RefreshCw size={12} className="animate-spin" />
+        <span className="text-[10px] font-bold uppercase tracking-tight">Sincronizando</span>
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <button 
+        onClick={onRetry}
+        className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-full border border-amber-100 dark:border-amber-500/20 hover:scale-105 transition-transform"
+      >
+        <AlertCircle size={12} />
+        <span className="text-[10px] font-bold uppercase tracking-tight">Erro</span>
+        <RefreshCw size={10} className="ml-0.5 opacity-60" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-100 dark:border-emerald-500/20">
+      <Cloud size={12} />
+      <span className="text-[10px] font-bold uppercase tracking-tight">Salvo</span>
+    </div>
   );
 }
 

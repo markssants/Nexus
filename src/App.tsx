@@ -7,7 +7,7 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { auth, signInWithGoogle, signOut, db } from './lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, orderBy, getDocFromServer } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, orderBy, onSnapshotsInSync } from 'firebase/firestore';
 import { Task, Habit, Status, Company, Project } from './types';
 
 enum OperationType {
@@ -104,6 +104,48 @@ export default function App() {
     return (saved as 'light' | 'dark') || 'dark';
   });
 
+  const [isOffline, setIsOffline] = useState(!window.navigator.onLine);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Real-time Sync Tracking
+  useEffect(() => {
+    if (!db) return;
+    
+    // onSnapshotsInSync fires when all active listeners have been updated 
+    // and are consistent with each other.
+    const unsubscribe = onSnapshotsInSync(db, () => {
+      // If we are online and this fires, it generally means local and server are in sync
+      if (window.navigator.onLine) {
+        setSyncStatus('idle');
+      }
+    });
+
+    return unsubscribe;
+  }, [db]);
+
+  const trackOp = async <T,>(op: () => Promise<T>): Promise<T> => {
+    setSyncStatus('syncing');
+    try {
+      const result = await op();
+      return result;
+    } catch (error) {
+      setSyncStatus('error');
+      console.error("Operation failed:", error);
+      throw error;
+    }
+  };
+
   const [inputPassword, setInputPassword] = useState('');
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
@@ -185,23 +227,35 @@ export default function App() {
     console.log('Setting up snapshots for user:', user.uid);
 
     const tasksQuery = query(collection(db, 'tasks'), where('userId', '==', user.uid));
-    const habitsQuery = query(collection(db, 'habits'), where('userId', '==', user.uid));
-    const companiesQuery = query(collection(db, 'companies'), where('userId', '==', user.uid));
-    const projectsQuery = query(collection(db, 'projects'), where('userId', '==', user.uid));
-
-    const unsubTasks = onSnapshot(tasksQuery, (snapshot) => {
-      console.log(`Tasks snapshot received: ${snapshot.size} docs`);
+    const legacyTasksQuery = query(collection(db, 'tasks'), where('userId', '==', null)); // For docs explicitly nulled
+    
+    const unsubTasks = onSnapshot(tasksQuery, { includeMetadataChanges: true }, (snapshot) => {
+      if (snapshot.metadata.hasPendingWrites) {
+        setSyncStatus('syncing');
+      }
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
-      setTasks(docs.sort((a, b) => {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return timeB - timeA;
-      }));
+      setTasks(prev => {
+        // Merge with existing to avoid flickering, but snapshot is authoritative
+        return docs.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeB - timeA;
+        });
+      });
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'tasks');
     });
 
-    const unsubHabits = onSnapshot(habitsQuery, (snapshot) => {
+    // Handle legacy migration in a separate one-time check or specific listener
+    // Note: Firestore doesn't easily query "field does not exist", so we'll try to find them
+    // and migration will be best-effort or handled by a broader rule-compliant query if possible.
+    // For now, focusing on PRIMARY synchronization for standard user data.
+    
+    const habitsQuery = query(collection(db, 'habits'), where('userId', '==', user.uid));
+    const unsubHabits = onSnapshot(habitsQuery, { includeMetadataChanges: true }, (snapshot) => {
+      if (snapshot.metadata.hasPendingWrites) {
+        setSyncStatus('syncing');
+      }
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Habit));
       setHabits(docs.sort((a, b) => {
         const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -212,7 +266,11 @@ export default function App() {
       handleFirestoreError(error, OperationType.LIST, 'habits');
     });
 
-    const unsubCompanies = onSnapshot(companiesQuery, (snapshot) => {
+    const companiesQuery = query(collection(db, 'companies'), where('userId', '==', user.uid));
+    const unsubCompanies = onSnapshot(companiesQuery, { includeMetadataChanges: true }, (snapshot) => {
+      if (snapshot.metadata.hasPendingWrites) {
+        setSyncStatus('syncing');
+      }
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Company));
       setCompanies(docs.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
@@ -226,7 +284,11 @@ export default function App() {
       handleFirestoreError(error, OperationType.LIST, 'companies');
     });
 
-    const unsubProjects = onSnapshot(projectsQuery, (snapshot) => {
+    const projectsQuery = query(collection(db, 'projects'), where('userId', '==', user.uid));
+    const unsubProjects = onSnapshot(projectsQuery, { includeMetadataChanges: true }, (snapshot) => {
+      if (snapshot.metadata.hasPendingWrites) {
+        setSyncStatus('syncing');
+      }
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
       setProjects(docs.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
@@ -250,149 +312,182 @@ export default function App() {
 
   const addCompany = async (name: string, icon: string = 'Building2', color: string = 'rose') => {
     if (!user || !db) return;
-    try {
-      const docRef = await addDoc(collection(db, 'companies'), {
-        name,
-        userId: user.uid,
-        icon,
-        color,
-        order: companies.length,
-        createdAt: new Date().toISOString(),
-      });
-      console.log('Company successfully added with ID:', docRef.id);
-      setActiveSpace(`company_${docRef.id}`);
-      return docRef.id;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'companies');
-    }
+    return trackOp(async () => {
+      try {
+        const docRef = await addDoc(collection(db, 'companies'), {
+          name,
+          userId: user.uid,
+          icon,
+          color,
+          order: companies.length,
+          createdAt: new Date().toISOString(),
+        });
+        console.log('Company successfully added with ID:', docRef.id);
+        setActiveSpace(`company_${docRef.id}`);
+        return docRef.id;
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, 'companies');
+      }
+    });
   };
 
   const deleteCompany = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'companies', id));
-      if (activeSpace === `company_${id}`) setActiveSpace('personal');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'companies');
-    }
+    if (!db) return;
+    return trackOp(async () => {
+      try {
+        await deleteDoc(doc(db, 'companies', id));
+        if (activeSpace === `company_${id}`) setActiveSpace('personal');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, 'companies');
+      }
+    });
   };
 
   const updateCompany = async (id: string, updates: Partial<Company>) => {
-    try {
-      await updateDoc(doc(db, 'companies', id), updates);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'companies');
-    }
+    if (!db) return;
+    return trackOp(async () => {
+      try {
+        await updateDoc(doc(db, 'companies', id), updates);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, 'companies');
+      }
+    });
   };
 
   const reorderCompanies = async (newCompanies: Company[]) => {
     if (!db) return;
-    try {
-      const batch: Promise<void>[] = [];
-      newCompanies.forEach((company, index) => {
-        batch.push(updateDoc(doc(db, 'companies', company.id), { order: index }));
-      });
-      await Promise.all(batch);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'companies');
-    }
+    return trackOp(async () => {
+      try {
+        const batch: Promise<void>[] = [];
+        newCompanies.forEach((company, index) => {
+          batch.push(updateDoc(doc(db, 'companies', company.id), { order: index }));
+        });
+        await Promise.all(batch);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, 'companies');
+      }
+    });
   };
 
   const addProject = async (name: string, icon: string = 'Layers', color: string = 'indigo') => {
     if (!user || !db) return;
-    try {
-      const docRef = await addDoc(collection(db, 'projects'), {
-        name,
-        userId: user.uid,
-        icon,
-        color,
-        order: projects.length,
-        createdAt: new Date().toISOString(),
-      });
-      console.log('Project successfully added with ID:', docRef.id);
-      setActiveSpace(`project_${docRef.id}`);
-      return docRef.id;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'projects');
-    }
+    return trackOp(async () => {
+      try {
+        const docRef = await addDoc(collection(db, 'projects'), {
+          name,
+          userId: user.uid,
+          icon,
+          color,
+          order: projects.length,
+          createdAt: new Date().toISOString(),
+        });
+        console.log('Project successfully added with ID:', docRef.id);
+        setActiveSpace(`project_${docRef.id}`);
+        return docRef.id;
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, 'projects');
+      }
+    });
   };
 
   const deleteProject = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'projects', id));
-      if (activeSpace === `project_${id}`) setActiveSpace('personal');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'projects');
-    }
+    if (!db) return;
+    return trackOp(async () => {
+      try {
+        await deleteDoc(doc(db, 'projects', id));
+        if (activeSpace === `project_${id}`) setActiveSpace('personal');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, 'projects');
+      }
+    });
   };
 
   const updateProject = async (id: string, updates: Partial<Project>) => {
-    try {
-      await updateDoc(doc(db, 'projects', id), updates);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'projects');
-    }
+    if (!db) return;
+    return trackOp(async () => {
+      try {
+        await updateDoc(doc(db, 'projects', id), updates);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, 'projects');
+      }
+    });
   };
 
   const reorderProjects = async (newProjects: Project[]) => {
     if (!db) return;
-    try {
-      const batch: Promise<void>[] = [];
-      newProjects.forEach((project, index) => {
-        batch.push(updateDoc(doc(db, 'projects', project.id), { order: index }));
-      });
-      await Promise.all(batch);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'projects');
-    }
+    return trackOp(async () => {
+      try {
+        const batch: Promise<void>[] = [];
+        newProjects.forEach((project, index) => {
+          batch.push(updateDoc(doc(db, 'projects', project.id), { order: index }));
+        });
+        await Promise.all(batch);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, 'projects');
+      }
+    });
   };
 
   const addTask = async (task: Partial<Task>) => {
-    if (!user) return;
-    try {
-      console.log('Attempting to add task:', task);
-      const newTask = {
-        ...task,
-        userId: user.uid,
-        createdAt: new Date().toISOString(),
-        status: task.status || 'todo',
-      };
-      
-      const docRef = await addDoc(collection(db, 'tasks'), newTask);
-      console.log('Task successfully added to Firestore with ID:', docRef.id);
-      
-      // Verification: Try to fetch it back immediately from server to confirm
-      // This is optional but can help diagnose if it's "missing"
-    } catch (error) {
-      console.error('Error adding task:', error);
-      handleFirestoreError(error, OperationType.CREATE, 'tasks');
-    }
+    if (!user || !db) return;
+    return trackOp(async () => {
+      try {
+        console.log('Attempting to add task:', task);
+        const newTask = {
+          ...task,
+          userId: user.uid,
+          createdAt: new Date().toISOString(),
+          status: task.status || 'todo',
+        };
+        
+        const docRef = await addDoc(collection(db, 'tasks'), newTask);
+        console.log('Task successfully added to Firestore with ID:', docRef.id);
+        return docRef.id;
+      } catch (error) {
+        console.error('Error adding task:', error);
+        handleFirestoreError(error, OperationType.CREATE, 'tasks');
+      }
+    });
   };
 
   const updateTask = async (id: string, updates: Partial<Task>) => {
-    try {
-      await updateDoc(doc(db, 'tasks', id), updates);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'tasks');
-    }
+    if (!db) return;
+    return trackOp(async () => {
+      try {
+        await updateDoc(doc(db, 'tasks', id), updates);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, 'tasks');
+      }
+    });
   };
 
   const deleteTask = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'tasks', id));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'tasks');
-    }
+    if (!db) return;
+    return trackOp(async () => {
+      try {
+        await deleteDoc(doc(db, 'tasks', id));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, 'tasks');
+      }
+    });
   };
 
   const toggleHabit = async (habit: Habit) => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    let newDates = [...habit.completedDates];
-    if (newDates.includes(today)) {
-      newDates = newDates.filter(d => d !== today);
-    } else {
-      newDates.push(today);
-    }
-    await updateDoc(doc(db, 'habits', habit.id), { completedDates: newDates });
+    if (!db) return;
+    return trackOp(async () => {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      let newDates = [...habit.completedDates];
+      if (newDates.includes(today)) {
+        newDates = newDates.filter(d => d !== today);
+      } else {
+        newDates.push(today);
+      }
+      await updateDoc(doc(db, 'habits', habit.id), { completedDates: newDates });
+    });
+  };
+
+  const retrySync = () => {
+    setSyncStatus('idle');
   };
 
   if (loading) {
@@ -604,6 +699,9 @@ export default function App() {
         deleteCompany={deleteCompany}
         updateCompany={updateCompany}
         reorderCompanies={reorderCompanies}
+        syncStatus={syncStatus}
+        isOffline={isOffline}
+        retrySync={retrySync}
       />
 
       <main className="flex-1 flex flex-col relative h-full overflow-hidden">

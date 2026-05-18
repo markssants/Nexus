@@ -10,7 +10,7 @@ import {
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { SmilePlus, Palette } from 'lucide-react';
+import { SmilePlus, Palette, Trash2 } from 'lucide-react';
 import { projectEmojis, companyEmojis, iconMap } from '../constants';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -21,9 +21,10 @@ interface EditSpaceDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (id: string, updates: any) => void;
+  onDelete?: (id: string) => void;
 }
 
-export function EditSpaceDialog({ item, type, isOpen, onClose, onUpdate }: EditSpaceDialogProps) {
+export function EditSpaceDialog({ item, type, isOpen, onClose, onUpdate, onDelete }: EditSpaceDialogProps) {
   const [name, setName] = useState(item.name);
   const [icon, setIcon] = useState(item.icon || (type === 'project' ? '🚀' : '🏢'));
   const [color, setColor] = useState(item.color || (type === 'project' ? 'indigo' : 'rose'));
@@ -140,20 +141,38 @@ export function EditSpaceDialog({ item, type, isOpen, onClose, onUpdate }: EditS
             </div>
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <Button 
-              variant="outline" 
-              onClick={onClose}
-              className="flex-1 dark:border-slate-700 dark:text-slate-300"
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleSave}
-              className="flex-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900"
-            >
-              Salvar Alterações
-            </Button>
+          <div className="flex flex-col gap-3 pt-2">
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={onClose}
+                className="flex-1 dark:border-slate-700 dark:text-slate-300"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSave}
+                className="flex-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900"
+              >
+                Salvar Alterações
+              </Button>
+            </div>
+            
+            {onDelete && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (confirm(`Tem certeza que deseja excluir ${item.name}?`)) {
+                    onDelete(item.id);
+                    onClose();
+                  }
+                }}
+                className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 gap-2 border border-transparent hover:border-rose-100 dark:hover:border-rose-500/20"
+              >
+                <Trash2 size={16} />
+                Excluir {type === 'project' ? 'Projeto' : 'Empresa'}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

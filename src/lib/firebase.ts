@@ -22,6 +22,18 @@ if (isConfigValid) {
     app = initializeApp(firebaseConfig);
     const databaseId = (import.meta as any).env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || "(default)";
     db = getFirestore(app, databaseId);
+    
+    // Enable offline persistence
+    import('firebase/firestore').then(({ enableIndexedDbPersistence }) => {
+      enableIndexedDbPersistence(db).catch((err) => {
+          if (err.code === 'failed-precondition') {
+              console.warn('Firestore persistence failed-precondition');
+          } else if (err.code === 'unimplemented') {
+              console.warn('Firestore persistence unimplemented');
+          }
+      });
+    }).catch(err => console.warn('Error importing for persistence:', err));
+
     auth = getAuth(app);
     googleProvider = new GoogleAuthProvider();
   } catch (error) {

@@ -9,43 +9,72 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from '../components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { 
   Settings, 
   Building2, 
-  Briefcase, 
-  Rocket, 
-  Zap, 
-  Globe, 
-  Shield, 
-  Cpu, 
-  Coffee, 
   Trash2,
   Pencil,
-  Plus,
   SmilePlus,
-  Palette
+  Palette,
+  GripVertical
 } from 'lucide-react';
 import { iconMap, colorMap, companyEmojis } from '../constants';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface CompanyManagerProps {
   companies: Company[];
   onAdd: (name: string, icon: string, color: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, updates: Partial<Company>) => void;
+  onReorder: (companies: Company[]) => void;
 }
 
-export function CompanyManager({ companies, onDelete, onUpdate }: Omit<CompanyManagerProps, 'onAdd'>) {
+export function CompanyManager({ companies, onDelete, onUpdate, onReorder }: Omit<CompanyManagerProps, 'onAdd'>) {
   const [newName, setNewName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('🏢');
   const [selectedColor, setSelectedColor] = useState('rose');
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = companies.findIndex((c) => c.id === active.id);
+      const newIndex = companies.findIndex((c) => c.id === over.id);
+      const newCompanies = arrayMove(companies, oldIndex, newIndex);
+      onReorder(newCompanies);
+    }
+  };
+
   const colors = [
     { name: 'rose', bg: 'bg-rose-500' },
     { name: 'blue', bg: 'bg-blue-500' },
@@ -179,6 +208,9 @@ export function CompanyManager({ companies, onDelete, onUpdate }: Omit<CompanyMa
                           lazyLoadEmojis={true}
                           searchDisabled={false}
                           skinTonesDisabled={true}
+                          searchPlaceholder="Pesquisar emoji..."
+                          // @ts-ignore
+                          locale="pt"
                         />
                       </PopoverContent>
                     </Popover>
@@ -241,48 +273,97 @@ export function CompanyManager({ companies, onDelete, onUpdate }: Omit<CompanyMa
                   Nenhuma empresa cadastrada.
                 </div>
               ) : (
-                companies.map(company => {
-                  const colorClass = (colorMap as any)[company.color || 'rose'] || 'text-rose-500';
-                  const isEmoji = !((iconMap as any)[company.icon]);
-
-                  return (
-                    <div key={company.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
-                      <div className="flex items-center gap-3">
-                        {isEmoji ? (
-                          <span className="text-lg">{company.icon}</span>
-                        ) : (
-                          React.createElement((iconMap as any)[company.icon || 'Building2'] || Building2, { size: 16, className: colorClass })
-                        )}
-                        <span className="font-semibold text-sm dark:text-slate-200">{company.name}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button 
-                          onClick={() => {
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={companies.map(c => c.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2">
+                      {companies.map((company) => (
+                        <SortableCompanyItem 
+                          key={company.id} 
+                          company={company} 
+                          onEdit={() => {
                             setEditingId(company.id);
                             setNewName(company.name);
-                            setSelectedIcon(company.icon);
+                            setSelectedIcon(company.icon || '🏢');
                             setSelectedColor(company.color || 'rose');
                           }}
-                          className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button 
-                          onClick={() => onDelete(company.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                          onDelete={() => onDelete(company.id)}
+                        />
+                      ))}
                     </div>
-                  );
-                })
+                  </SortableContext>
+                </DndContext>
               )}
             </div>
           )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SortableCompanyItem({ company, onEdit, onDelete }: { company: Company; onEdit: () => void; onDelete: () => void; key?: React.Key }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: company.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const colorClass = (colorMap as any)[company.color || 'rose'] || 'text-rose-500';
+  const isEmoji = !((iconMap as any)[company.icon || '']);
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style}
+      className={`flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 ${isDragging ? 'shadow-xl border-slate-200 dark:border-slate-600' : ''}`}
+    >
+      <div className="flex items-center gap-3">
+        <button 
+          {...attributes} 
+          {...listeners}
+          className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-grab active:cursor-grabbing"
+        >
+          <GripVertical size={14} />
+        </button>
+        {isEmoji ? (
+          <span className="text-lg">{company.icon}</span>
+        ) : (
+          React.createElement((iconMap as any)[company.icon || 'Building2'] || Building2, { size: 16, className: colorClass })
+        )}
+        <span className="font-semibold text-sm dark:text-slate-200">{company.name}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button 
+          onClick={onEdit}
+          className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
+        >
+          <Pencil size={16} />
+        </button>
+        <button 
+          onClick={onDelete}
+          className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+    </div>
   );
 }
 

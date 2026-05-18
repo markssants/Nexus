@@ -215,6 +215,9 @@ export default function App() {
     const unsubCompanies = onSnapshot(companiesQuery, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Company));
       setCompanies(docs.sort((a, b) => {
+        if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+        if (a.order !== undefined) return -1;
+        if (b.order !== undefined) return 1;
         const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return timeB - timeA;
@@ -226,6 +229,9 @@ export default function App() {
     const unsubProjects = onSnapshot(projectsQuery, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
       setProjects(docs.sort((a, b) => {
+        if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+        if (a.order !== undefined) return -1;
+        if (b.order !== undefined) return 1;
         const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return timeB - timeA;
@@ -243,16 +249,19 @@ export default function App() {
   }, [user, db]);
 
   const addCompany = async (name: string, icon: string = 'Building2', color: string = 'rose') => {
-    if (!user) return;
+    if (!user || !db) return;
     try {
       const docRef = await addDoc(collection(db, 'companies'), {
         name,
         userId: user.uid,
         icon,
         color,
+        order: companies.length,
         createdAt: new Date().toISOString(),
       });
       console.log('Company successfully added with ID:', docRef.id);
+      setActiveSpace(`company_${docRef.id}`);
+      return docRef.id;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'companies');
     }
@@ -275,17 +284,33 @@ export default function App() {
     }
   };
 
+  const reorderCompanies = async (newCompanies: Company[]) => {
+    if (!db) return;
+    try {
+      const batch: Promise<void>[] = [];
+      newCompanies.forEach((company, index) => {
+        batch.push(updateDoc(doc(db, 'companies', company.id), { order: index }));
+      });
+      await Promise.all(batch);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'companies');
+    }
+  };
+
   const addProject = async (name: string, icon: string = 'Layers', color: string = 'indigo') => {
-    if (!user) return;
+    if (!user || !db) return;
     try {
       const docRef = await addDoc(collection(db, 'projects'), {
         name,
         userId: user.uid,
         icon,
         color,
+        order: projects.length,
         createdAt: new Date().toISOString(),
       });
       console.log('Project successfully added with ID:', docRef.id);
+      setActiveSpace(`project_${docRef.id}`);
+      return docRef.id;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'projects');
     }
@@ -303,6 +328,19 @@ export default function App() {
   const updateProject = async (id: string, updates: Partial<Project>) => {
     try {
       await updateDoc(doc(db, 'projects', id), updates);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'projects');
+    }
+  };
+
+  const reorderProjects = async (newProjects: Project[]) => {
+    if (!db) return;
+    try {
+      const batch: Promise<void>[] = [];
+      newProjects.forEach((project, index) => {
+        batch.push(updateDoc(doc(db, 'projects', project.id), { order: index }));
+      });
+      await Promise.all(batch);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'projects');
     }
@@ -475,7 +513,7 @@ export default function App() {
              <UserIcon className="w-6 h-6" />
              <BookOpen className="w-6 h-6" />
           </div>
-          <p className="mt-12 text-[10px] font-bold tracking-[0.2em] text-slate-400 dark:text-slate-600 uppercase">Nexus Workspace v1.2</p>
+          <p className="mt-12 text-[10px] font-bold tracking-[0.2em] text-slate-400 dark:text-slate-600 uppercase">Nexus Workspace v1.5</p>
         </motion.div>
       </div>
     );
@@ -555,14 +593,17 @@ export default function App() {
         setActiveView={setActiveView}
         projects={projects}
         companies={companies}
+        tasks={tasks}
         user={user as any}
         signOut={signOut}
         addProject={addProject}
         deleteProject={deleteProject}
         updateProject={updateProject}
+        reorderProjects={reorderProjects}
         addCompany={addCompany}
         deleteCompany={deleteCompany}
         updateCompany={updateCompany}
+        reorderCompanies={reorderCompanies}
       />
 
       <main className="flex-1 flex flex-col relative h-full overflow-hidden">

@@ -9,6 +9,7 @@ export interface Company {
   icon?: string;
   color?: string;
   createdAt: string;
+  order?: number;
 }
 
 export interface Project {
@@ -18,6 +19,7 @@ export interface Project {
   icon?: string;
   color?: string;
   createdAt: string;
+  order?: number;
 }
 
 export interface Task {

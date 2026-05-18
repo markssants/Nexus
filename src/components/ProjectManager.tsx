@@ -9,43 +9,71 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from '../components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { 
   Settings, 
   Layers, 
-  Rocket, 
-  Zap, 
-  Globe, 
-  Shield, 
-  Cpu, 
-  Hash, 
-  CheckCircle2, 
   Trash2,
   Pencil,
-  Plus,
   SmilePlus,
-  Palette
+  Palette,
+  GripVertical
 } from 'lucide-react';
 import { iconMap, colorMap, projectEmojis } from '../constants';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface ProjectManagerProps {
   projects: Project[];
   onAdd: (name: string, icon: string, color: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, updates: Partial<Project>) => void;
+  onReorder: (projects: Project[]) => void;
 }
 
-export function ProjectManager({ projects, onDelete, onUpdate }: Omit<ProjectManagerProps, 'onAdd'>) {
+export function ProjectManager({ projects, onDelete, onUpdate, onReorder }: Omit<ProjectManagerProps, 'onAdd'>) {
   const [newName, setNewName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('🚀');
   const [selectedColor, setSelectedColor] = useState('indigo');
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = projects.findIndex((p) => p.id === active.id);
+      const newIndex = projects.findIndex((p) => p.id === over.id);
+      const newProjects = arrayMove(projects, oldIndex, newIndex);
+      onReorder(newProjects);
+    }
+  };
 
   const colors = [
     { name: 'indigo', bg: 'bg-indigo-500' },
@@ -180,6 +208,9 @@ export function ProjectManager({ projects, onDelete, onUpdate }: Omit<ProjectMan
                           lazyLoadEmojis={true}
                           searchDisabled={false}
                           skinTonesDisabled={true}
+                          searchPlaceholder="Pesquisar emoji..."
+                          // @ts-ignore
+                          locale="pt"
                         />
                       </PopoverContent>
                     </Popover>
@@ -242,48 +273,97 @@ export function ProjectManager({ projects, onDelete, onUpdate }: Omit<ProjectMan
                   Nenhum projeto cadastrado.
                 </div>
               ) : (
-                projects.map(project => {
-                  const colorClass = (colorMap as any)[project.color || 'indigo'] || 'text-indigo-500';
-                  const isEmoji = !((iconMap as any)[project.icon]);
-                  
-                  return (
-                    <div key={project.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
-                      <div className="flex items-center gap-3">
-                        {isEmoji ? (
-                          <span className="text-lg">{project.icon}</span>
-                        ) : (
-                          React.createElement((iconMap as any)[project.icon || 'Layers'] || Layers, { size: 16, className: colorClass })
-                        )}
-                        <span className="font-semibold text-sm dark:text-slate-200">{project.name}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button 
-                          onClick={() => {
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={projects.map(p => p.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2">
+                      {projects.map((project) => (
+                        <SortableProjectItem 
+                          key={project.id} 
+                          project={project} 
+                          onEdit={() => {
                             setEditingId(project.id);
                             setNewName(project.name);
-                            setSelectedIcon(project.icon);
+                            setSelectedIcon(project.icon || '🚀');
                             setSelectedColor(project.color || 'indigo');
                           }}
-                          className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button 
-                          onClick={() => onDelete(project.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                          onDelete={() => onDelete(project.id)}
+                        />
+                      ))}
                     </div>
-                  );
-                })
+                  </SortableContext>
+                </DndContext>
               )}
             </div>
           )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SortableProjectItem({ project, onEdit, onDelete }: { project: Project; onEdit: () => void; onDelete: () => void; key?: React.Key }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: project.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const colorClass = (colorMap as any)[project.color || 'indigo'] || 'text-indigo-500';
+  const isEmoji = !((iconMap as any)[project.icon || '']);
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style}
+      className={`flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 ${isDragging ? 'shadow-xl border-slate-200 dark:border-slate-600' : ''}`}
+    >
+      <div className="flex items-center gap-3">
+        <button 
+          {...attributes} 
+          {...listeners}
+          className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-grab active:cursor-grabbing"
+        >
+          <GripVertical size={14} />
+        </button>
+        {isEmoji ? (
+          <span className="text-lg">{project.icon}</span>
+        ) : (
+          React.createElement((iconMap as any)[project.icon || 'Layers'] || Layers, { size: 16, className: colorClass })
+        )}
+        <span className="font-semibold text-sm dark:text-slate-200">{project.name}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button 
+          onClick={onEdit}
+          className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors"
+        >
+          <Pencil size={16} />
+        </button>
+        <button 
+          onClick={onDelete}
+          className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+    </div>
   );
 }
 

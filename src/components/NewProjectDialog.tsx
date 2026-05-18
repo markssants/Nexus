@@ -144,6 +144,9 @@ export function NewProjectDialog({ onAdd }: NewProjectDialogProps) {
                       lazyLoadEmojis={true}
                       searchDisabled={false}
                       skinTonesDisabled={true}
+                      searchPlaceholder="Pesquisar emoji..."
+                      // @ts-ignore
+                      locale="pt"
                     />
                   </PopoverContent>
                 </Popover>

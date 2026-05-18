@@ -70,6 +70,8 @@ import { format } from 'date-fns';
 // Views & Components
 import KanbanBoard from './components/kanban/KanbanBoard';
 import TaskListView from './components/list/TaskListView';
+import { TaskEditDialog } from './components/TaskEditDialog';
+import { TaskDetailsDialog } from './components/TaskDetailsDialog';
 import CalendarView from './components/calendar/CalendarView';
 import HabitTrackerView from './components/habits/HabitTracker';
 import { StudyModule } from './components/StudyModule';
@@ -92,6 +94,8 @@ export default function App() {
     return saved || 'personal';
   });
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
   const [initialTaskStatus, setInitialTaskStatus] = useState<Status>('todo');
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -817,10 +821,16 @@ export default function App() {
                     setInitialTaskStatus(status);
                     setIsTaskModalOpen(true);
                   }}
+                  onTaskClick={(task) => setViewingTask(task)}
                 />
               )}
               {activeView === 'list' && (
-                <TaskListView tasks={filteredTasks} onUpdate={updateTask} onDelete={deleteTask} />
+                <TaskListView 
+                  tasks={filteredTasks} 
+                  onUpdate={updateTask} 
+                  onDelete={deleteTask} 
+                  onTaskClick={(task) => setViewingTask(task)}
+                />
               )}
               {activeView === 'calendar' && (
                 <CalendarView tasks={filteredTasks} />
@@ -834,6 +844,32 @@ export default function App() {
             </motion.div>
           </AnimatePresence>
         </div>
+
+        <TaskDetailsDialog
+          task={viewingTask}
+          isOpen={!!viewingTask}
+          onClose={() => setViewingTask(null)}
+          onEdit={(task) => {
+            setViewingTask(null);
+            setEditingTask(task);
+          }}
+          onDelete={deleteTask}
+          onToggleStatus={(id, currentStatus) => {
+            updateTask(id, { status: currentStatus === 'done' ? 'todo' : 'done' });
+          }}
+          companies={companies}
+          projects={projects}
+        />
+
+        <TaskEditDialog
+          task={editingTask}
+          isOpen={!!editingTask}
+          onClose={() => setEditingTask(null)}
+          onUpdate={updateTask}
+          onDelete={deleteTask}
+          companies={companies}
+          projects={projects}
+        />
       </main>
     </div>
   );

@@ -11,9 +11,10 @@ interface TaskListViewProps {
   tasks: Task[];
   onUpdate: (id: string, updates: Partial<Task>) => void;
   onDelete: (id: string) => void;
+  onTaskClick?: (task: Task) => void;
 }
 
-export default function TaskListView({ tasks, onUpdate, onDelete }: TaskListViewProps) {
+export default function TaskListView({ tasks, onUpdate, onDelete, onTaskClick }: TaskListViewProps) {
   const sortedTasks = [...tasks].sort((a, b) => {
     if (a.status === 'done' && b.status !== 'done') return 1;
     if (a.status !== 'done' && b.status === 'done') return -1;
@@ -42,14 +43,18 @@ export default function TaskListView({ tasks, onUpdate, onDelete }: TaskListView
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.05 }}
+              onClick={() => onTaskClick?.(task)}
+              className="cursor-pointer"
             >
               <Card className={`rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-all hover:shadow-md ${task.status === 'done' ? 'opacity-60 grayscale-[0.2]' : ''}`}>
                 <CardContent className="p-4 flex items-center gap-5">
-                   <Checkbox 
-                     checked={task.status === 'done'} 
-                     onCheckedChange={(checked) => onUpdate(task.id, { status: checked ? 'done' : 'todo' })}
-                     className="w-5 h-5 rounded-md dark:border-slate-700"
-                   />
+                   <div onClick={(e) => e.stopPropagation()}>
+                    <Checkbox 
+                      checked={task.status === 'done'} 
+                      onCheckedChange={(checked) => onUpdate(task.id, { status: checked ? 'done' : 'todo' })}
+                      className="w-5 h-5 rounded-md dark:border-slate-700"
+                    />
+                   </div>
                    
                    <div className="flex-1">
                       <h4 className={`font-semibold text-slate-900 dark:text-slate-100 ${task.status === 'done' ? 'line-through text-slate-400 dark:text-slate-500' : ''}`}>
@@ -73,7 +78,7 @@ export default function TaskListView({ tasks, onUpdate, onDelete }: TaskListView
                       </div>
                    </div>
 
-                   <button onClick={() => onDelete(task.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-rose-500 transition-colors">
+                   <button onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} className="p-2 text-slate-300 dark:text-slate-600 hover:text-rose-500 transition-colors">
                       <Trash2 size={16} />
                    </button>
                 </CardContent>

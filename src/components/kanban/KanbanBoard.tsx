@@ -15,6 +15,7 @@ interface KanbanBoardProps {
   onUpdate: (id: string, updates: Partial<Task>) => void;
   onDelete: (id: string) => void;
   onAddTask?: (status: Status) => void;
+  onTaskClick?: (task: Task) => void;
 }
 
 const COLUMNS: { id: Status; title: string }[] = [
@@ -22,7 +23,7 @@ const COLUMNS: { id: Status; title: string }[] = [
   { id: 'in_progress', title: 'Em Andamento' },
   { id: 'done', title: 'Concluído' },
 ];
-export default function KanbanBoard({ tasks, onUpdate, onDelete, onAddTask }: KanbanBoardProps) {
+export default function KanbanBoard({ tasks, onUpdate, onDelete, onAddTask, onTaskClick }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -88,7 +89,7 @@ export default function KanbanBoard({ tasks, onUpdate, onDelete, onAddTask }: Ka
             <SortableContext id={column.id} items={tasks.filter(t => t.status === column.id).map(t => t.id)} strategy={verticalListSortingStrategy}>
               <div className="flex-1 space-y-4">
                 {tasks.filter(t => t.status === column.id).map(task => (
-                  <KanbanTask key={String(task.id)} task={task} onDelete={onDelete} />
+                   <KanbanTask key={String(task.id)} task={task} onDelete={onDelete} onClick={() => onTaskClick?.(task)} />
                 ))}
               </div>
             </SortableContext>
@@ -99,7 +100,7 @@ export default function KanbanBoard({ tasks, onUpdate, onDelete, onAddTask }: Ka
   );
 }
 
-const KanbanTask: React.FC<{ task: Task, onDelete: (id: string) => void }> = ({ task, onDelete }) => {
+const KanbanTask: React.FC<{ task: Task, onDelete: (id: string) => void, onClick: () => void }> = ({ task, onDelete, onClick }) => {
   const {
     attributes,
     listeners,
@@ -122,8 +123,8 @@ const KanbanTask: React.FC<{ task: Task, onDelete: (id: string) => void }> = ({ 
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group">
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick}>
+      <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 shadow-sm hover:shadow-md transition-all cursor-pointer group">
         <CardContent className="p-5">
           <div className="flex justify-between items-start mb-3">
             <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${priorityColor[task.priority]}`}>
